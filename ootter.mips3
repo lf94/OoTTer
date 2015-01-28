@@ -1,0 +1,207 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; Ootter - A really rudimentary terminal written for Ocarina of Time (Debug ROM)
+; 
+; Features:
+; 32 lines of display (for this game at least)
+; No wrapping
+; Easy to use
+; Flexible - port to other games supporting bcopy/memcpy or *printf, and screen drawing
+;
+; Written by Lee (lee@is-an-information-technology-professional.com)
+;
+; Assembled with Renegade64 using the following options:
+; Language: r4300i
+; Mode: On Command
+; Code Type: 81
+; NOP Type: Long
+; Output Type: Normal 
+;
+; You can test this code by enabling the gameshark code, replacing the JAL at 
+; 0x80084D98 with 0x0C180140, and then go and collect items.
+; It is currently set to 10 lines because OoT runs out of memory for graphics.
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Gameshark code that enables a debug menu routine. This is the draw terminal routine our code will hook into.
+; Thanks Twili
+; 81211268 0001
+
+;;; There are two parts to this, the terminal and the draw terminal routine.
+; The terminal can either be patched into the ROM @ 0x2CF0 or turned into a gs code.
+; The draw terminal is easiest to turn into a gameshark code.
+;;; Hook
+.org 0x8007074C
+NOP
+; Replace all of the drawing commands in this function with our own
+JAL draw_terminal
+NOP
+; Skip to the end of the function after our function is done
+J 0x80070BF8
+NOP
+
+.org 0x80600000
+;;; Our terminal routine
+draw_terminal:
+ADDIU $sp, $sp, 0xFFB0
+SD $s5, 0x0018($sp)
+SD $s4, 0x0020($sp)
+SD $s3, 0x0028($sp)
+SD $s2, 0x0030($sp)
+SD $s1, 0x0038($sp)
+SD $s0, 0x0040($sp)
+SD $ra, 0x0048($sp)
+
+;;; Pointer to string storage
+LUI $s1, 0x8060
+ADDIU $s1, $s1, 0x1000
+
+;;; Loop through all pointers and call the text drawing function
+; Change any 0x000A (and 0x0009 in the print routine below) to the number of n lines you want. 
+; Acts as a counter too
+AND $s2, $zero, $zero
+ADDIU $s2, $zero, 0x0007
+AND $s3, $zero, $zero
+ADDIU $s3, $zero, 0x0004
+AND $s5, $zero, $zero ; y-coordinate
+draw_next_text:
+   	DADDU $s0, $a0, $zero
+    
+          ;;; Calculate our next pointer
+          MULTLO $s4, $s2, $s3
+          ADD $s4, $s1, $s4
+    	;;; $a0 is a data structure (that we need) that is stored on the stack.
+    	; It is already initialized when entering this routine.
+        
+   	;;; SetTextRGBA (white)
+   	ADDIU $a1, $zero, 0x00FF
+    	ADDIU $a2, $zero, 0x00FF
+    	ADDIU $a3, $zero, 0x00FF
+    	ADDIU $v0, $zero, 0x00FF
+    	JAL 0x000FB3AC
+    	SW $v0, 0x0010($sp)
+    
+    	;;; SetTextXY
+    	DADDU $a0, $s0, $zero
+    	ADDIU $a1, $zero, 0x0000
+    	JAL 0x800FB41C
+    	OR $a2, $zero, $s5 ; y coordinate
+    
+    	;;; SetTextString - has a printf-like function built-in
+          DADDU $a0, $s0, $zero
+    	LW $t1, 0x0000($s4) ; Text
+          LW $a2, 0x0000($t1)
+          LW $a3, 0x0004($t1)
+          ADDIU $t1, $t1, 0x000C
+          OR $a1, $zero, $t1
+          BEQ $a1, $zero, quit
+          NOP
+    	JAL 0x800FBCB4
+    	NOP
+          ADDIU $s2, $s2, 0xFFFF
+          ADDIU $s5, $s5, 0x0001
+    	BGTZ $s2, draw_next_text ; if we've encountered 10 pointers, stop
+    	NOP
+quit:
+LD $s5, 0x0018($sp)
+LD $s4, 0x0020($sp)
+LD $s3, 0x0028($sp)
+LD $s2, 0x0030($sp)
+LD $s1, 0x0038($sp)
+LD $s0, 0x0040($sp)
+LD $ra, 0x0048($sp)
+ADDIU $sp,$sp, 0x0050
+JR $ra
+NOP
+
+
+.org 0x80600500 ; Not entirely necessary, but makes calling to it easier.
+;;; Our print to terminal routine - this replaces text print calls.
+print_to_terminal:
+ADDIU $sp, $sp, 0xFFB0
+;;; Save the registers for the function that called this one, so that we may use them.
+SD $s6, 0x0018($sp)
+SD $s5, 0x0020($sp)
+SD $s4, 0x0028($sp)
+SD $s3, 0x0030($sp)
+SD $s2, 0x0038($sp)
+SD $s1, 0x0040($sp)
+SD $ra, 0x0048($sp)
+
+;;; Pointer to string storage
+LUI $s1, 0x8060
+ADDIU $s1, $s1, 0x1000
+
+;;; A circular queue
+;;; All of the positions in the queue are pre-initialized with pointers.
+; Shift all the pointers by size of a pointer (4 bytes)
+AND $s2, $zero, $zero
+; Change any 0x0009 (and 0x000A in the terminal routine above) to the number of (n-1) lines you want. 
+; Remember to add string buffers!
+ADDIU $s2, $s2, 0x0007
+AND $s3, $zero, $zero
+ADDIU $s3, $s3, 0x0004
+queue_swap:
+    MULTLO $s4, $s2, $s3
+    ADD $s4, $s1, $s4
+    LW $s5, 0x0000($s4)
+    LW $s6, 0xFFFC($s4)
+    SW $s6, 0x0000($s4)
+    SW $s5, 0xFFFC($s4)
+    ADDIU $s2, $s2, 0xFFFF
+    BGTZ $s2, queue_swap
+    NOP
+
+; Save our arguments
+LW $t1, 0x0000($s1)
+BEQ $t1, $zero, quit
+NOP
+SW $a1, 0x0000($t1)
+SW $a2, 0x0004($t1)
+SW $a3, 0x0008($t1)
+ADDIU $t1, $t1, 0x000C
+
+;;; A print function call. This will vary from game to game.
+; Since Ocarina of Time doesn't have sprintf compiled in, we have to settle for memcpy.
+; There is a library provided by Nintendo called libultra, which is like a libc.
+
+;;; strlen(char *str)
+; Our first argument (A0) is already set to our text
+JAL 0x800060F0
+NOP
+OR $a2, $zero, $v0 ; Store result as our second argument to memcpy
+;;; memcpy(void *dest, void *src, int len)
+; Our first argument is already set to debug text. We want it to be our second arg. (src), so we swap.
+OR $t2, $zero, $a0
+OR $a0, $zero, $a1
+OR $a1, $zero, $t2
+; Load the next string buffer pointer as our first argument.
+OR $a0, $zero, $t1
+JAL 0x80002ED0
+NOP
+
+;;; Restore the registers for the function we are returning to.
+quit:
+LD $s6, 0x0018($sp)
+LD $s5, 0x0020($sp)
+LD $s4, 0x0028($sp)
+LD $s3, 0x0030($sp)
+LD $s2, 0x0038($sp)
+LD $s1, 0x0040($sp)
+LD $ra, 0x0048($sp)
+ADDIU $sp,$sp, 0x0050
+AND $v0, $zero, $zero
+JR $ra
+ADDIU $v0, $v0, 0x0001
+
+;;; Our data (string buffers) - an auurray of pointers that point to free RAM. Each pointer gets 4k of RAM.
+; run r2gs.py on this.
+; 0x1000 should be more than enough RAM for any of these strings being passed to it.
+.org 0x80601000
+; 80610000
+; 80611000
+; 80612000
+; 80613000
+; 80614000
+; 80615000
+; 80616000
+; 80617000
