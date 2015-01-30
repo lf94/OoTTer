@@ -29,6 +29,21 @@
 ;;; There are two parts to this, the terminal and the draw terminal routine.
 ; The terminal can either be patched into the ROM @ 0x2CF0 or turned into a gs code.
 ; The draw terminal is easiest to turn into a gameshark code.
+
+.org 0x
+OR $t2, $zero, $a0 ; save $a0 for later
+LUI $a0, 0x8062 ; pointer to text
+ADDIU $a0, $a0, 0x0000
+LUI $t1, 0x2530 ; load text
+ADDIU $t1, $t1, 0x3878
+SW $t1, 0x0000($a0) ; save text
+LUI $t1, 0x8022 ; load link anim pointer
+ADDIU $t1, $t1, 0x476C
+LW $a1, 0x0000($t1) ; read link anim number
+JAL terminal ; this will store the text and anim number
+NOP
+OR $a0, $zero, $t2 ; restore $a0
+
 ;;; Hook
 .org 0x8007074C
 NOP
@@ -66,9 +81,9 @@ AND $s5, $zero, $zero ; y-coordinate
 draw_next_text:
    	DADDU $s0, $a0, $zero
     
-          ;;; Calculate our next pointer
-          MULTLO $s4, $s2, $s3
-          ADD $s4, $s1, $s4
+        ;;; Calculate our next pointer
+        MULTLO $s4, $s2, $s3
+        ADD $s4, $s1, $s4
     	;;; $a0 is a data structure (that we need) that is stored on the stack.
     	; It is already initialized when entering this routine.
         
@@ -87,19 +102,19 @@ draw_next_text:
     	OR $a2, $zero, $s5 ; y coordinate
     
     	;;; SetTextString - has a printf-like function built-in
-          DADDU $a0, $s0, $zero
+        DADDU $a0, $s0, $zero
     	LW $t1, 0x0000($s4) ; Text
-          LW $a2, 0x0000($t1)
-          LW $a3, 0x0004($t1)
-          ADDIU $t1, $t1, 0x000C
-          OR $a1, $zero, $t1
-          BEQ $a1, $zero, quit
-          NOP
+        LW $a2, 0x0000($t1)
+        LW $a3, 0x0004($t1)
+        ADDIU $t1, $t1, 0x000C
+        OR $a1, $zero, $t1
+        BEQ $a1, $zero, quit
+        NOP
     	JAL 0x800FBCB4
     	NOP
-          ADDIU $s2, $s2, 0xFFFF
-          ADDIU $s5, $s5, 0x0001
-    	BGTZ $s2, draw_next_text ; if we've encountered 10 pointers, stop
+        ADDIU $s2, $s2, 0xFFFF
+        ADDIU $s5, $s5, 0x0001
+    	BGEZ $s2, draw_next_text ; if we've encountered 10 pointers, stop
     	NOP
 quit:
 LD $s5, 0x0018($sp)
