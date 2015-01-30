@@ -30,20 +30,6 @@
 ; The terminal can either be patched into the ROM @ 0x2CF0 or turned into a gs code.
 ; The draw terminal is easiest to turn into a gameshark code.
 
-.org 0x
-OR $t2, $zero, $a0 ; save $a0 for later
-LUI $a0, 0x8062 ; pointer to text
-ADDIU $a0, $a0, 0x0000
-LUI $t1, 0x2530 ; load text
-ADDIU $t1, $t1, 0x3878
-SW $t1, 0x0000($a0) ; save text
-LUI $t1, 0x8022 ; load link anim pointer
-ADDIU $t1, $t1, 0x476C
-LW $a1, 0x0000($t1) ; read link anim number
-JAL terminal ; this will store the text and anim number
-NOP
-OR $a0, $zero, $t2 ; restore $a0
-
 ;;; Hook
 .org 0x8007074C
 NOP
