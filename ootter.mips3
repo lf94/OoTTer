@@ -92,12 +92,13 @@ draw_next_text:
     	LW $t1, 0x0000($s4) ; Text
         LW $a2, 0x0000($t1)
         LW $a3, 0x0004($t1)
+        LW $v0, 0x0008($t1)
         ADDIU $t1, $t1, 0x000C
         OR $a1, $zero, $t1
         BEQ $a1, $zero, quit
         NOP
-    	JAL 0x800FBCB4
-    	NOP
+        JAL 0x800FBCB4
+        SW $v0, 0x0010($sp)
         ADDIU $s2, $s2, 0xFFFF
         ADDIU $s5, $s5, 0x0001
     	BGEZ $s2, draw_next_text ; if we've encountered 10 pointers, stop
