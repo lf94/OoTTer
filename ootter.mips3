@@ -170,6 +170,7 @@ ADDIU $t1, $t1, 0x000C
 ; Our first argument (A0) is already set to our text
 JAL 0x800060F0
 NOP
+ADDIU $v0, $v0, 0x0001
 OR $a2, $zero, $v0 ; Store result as our second argument to memcpy
 ;;; memcpy(void *dest, void *src, int len)
 ; Our first argument is already set to debug text. We want it to be our second arg. (src), so we swap.
